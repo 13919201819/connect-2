@@ -650,7 +650,6 @@
 // }
 
 
-
 import { NextResponse } from 'next/server';
 import { google, calendar_v3 } from 'googleapis';
 import nodemailer from 'nodemailer';
