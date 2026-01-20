@@ -651,9 +651,6 @@
 
 
 
-
-
-
 import { NextResponse } from 'next/server';
 import { google, calendar_v3 } from 'googleapis';
 import nodemailer from 'nodemailer';
@@ -674,20 +671,24 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { 
-      selectedDate, 
-      selectedTime, 
-      formData 
+      name,
+      email,
+      phone,
+      company,
+      message,
+      date,
+      time,
+      timezone
     } = body;
 
     console.log('📅 Received demo booking request:', { 
-      date: selectedDate, 
-      time: selectedTime, 
-      name: formData.fullName 
+      date, 
+      time, 
+      name 
     });
 
     // Validate required fields
-    if (!selectedDate || !selectedTime || !formData.fullName || !formData.email || 
-        !formData.companyName || !formData.jobTitle || !formData.companySize) {
+    if (!date || !time || !name || !email || !company) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { 
@@ -697,6 +698,24 @@ export async function POST(req: Request) {
           }
         }
       );
+    }
+    
+    // Parse additional details from message
+    const messageLines = message.split('\n');
+    let jobTitle = '';
+    let companySize = '';
+    let specificInterest = '';
+    let additionalNotes = '';
+    
+    messageLines.forEach((line: string) => {
+      if (line.startsWith('Job Title:')) jobTitle = line.replace('Job Title:', '').trim();
+      if (line.startsWith('Company Size:')) companySize = line.replace('Company Size:', '').trim();
+      if (line.startsWith('Product Interest:')) specificInterest = line.replace('Product Interest:', '').trim();
+    });
+    
+    const notesIndex = message.indexOf('Additional Notes:');
+    if (notesIndex !== -1) {
+      additionalNotes = message.substring(notesIndex + 'Additional Notes:'.length).trim();
     }
 
     // 1️⃣ Google Auth Setup
@@ -711,29 +730,11 @@ export async function POST(req: Request) {
 
     const calendar = google.calendar({ version: 'v3', auth });
 
-    // 2️⃣ Parse time and create date-time (EST timezone)
-    const timezone = 'America/New_York'; // EST
+    // 2️⃣ Create date-time (time is already in 24hr format from frontend)
+    const tz = timezone || 'America/New_York';
+    const dateTimeString = `${date}T${time}:00`;
     
-    // Convert selectedTime from "HH:00 AM/PM" to 24-hour format
-    // Convert selectedTime from "HH:00 AM/PM" to 24-hour format
-    const parseTime = (timeStr: string): string => {
-      const [time, period] = timeStr.split(' ');
-      const [hoursStr] = time.split(':');
-      let hour = parseInt(hoursStr);
-      
-      if (period === 'PM' && hour !== 12) {
-        hour += 12;
-      } else if (period === 'AM' && hour === 12) {
-        hour = 0;
-      }
-      
-      return hour.toString().padStart(2, '0');
-    };
-
-    const hour24 = parseTime(selectedTime);
-    const dateTimeString = `${selectedDate}T${hour24}:00:00`;
-    
-    // Create Date object in EST timezone
+    // Create Date object in specified timezone
     const startDateTime = new Date(dateTimeString);
     const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // +1 hour
     
@@ -741,7 +742,7 @@ export async function POST(req: Request) {
     const endISO = endDateTime.toISOString();
 
     console.log('🕐 Time conversion:', {
-      input: { date: selectedDate, time: selectedTime, timezone },
+      input: { date, time, timezone: tz },
       dateTimeString,
       startISO,
       endISO
@@ -749,39 +750,39 @@ export async function POST(req: Request) {
 
     // 3️⃣ Create Calendar Event
     const event: calendar_v3.Schema$Event = {
-      summary: `Enterprise Demo: ${formData.companyName} - ${formData.fullName}`,
+      summary: `Enterprise Demo: ${company} - ${name}`,
       description: `
 ENTERPRISE DEMO BOOKING
 
 Client Information:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 Name: ${formData.fullName}
-💼 Job Title: ${formData.jobTitle}
-🏢 Company: ${formData.companyName}
-📊 Company Size: ${formData.companySize}
-✉️ Email: ${formData.email}
-📱 Phone: ${formData.phone || 'Not provided'}
+👤 Name: ${name}
+💼 Job Title: ${jobTitle || 'Not provided'}
+🏢 Company: ${company}
+📊 Company Size: ${companySize || 'Not provided'}
+✉️ Email: ${email}
+📱 Phone: ${phone || 'Not provided'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎯 Product Interest:
-${formData.specificInterest || 'General AI Enterprise Solutions'}
+${specificInterest || 'General AI Enterprise Solutions'}
 
 📝 Additional Notes:
-${formData.additionalNotes || 'No additional notes provided'}
+${additionalNotes || 'No additional notes provided'}
 
-⏰ Scheduled Time: ${selectedTime} EST
-📅 Date: ${new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+⏰ Scheduled Time: ${time} ${tz}
+📅 Date: ${new Date(date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
       `.trim(),
       start: { 
         dateTime: startISO,
-        timeZone: timezone
+        timeZone: tz
       },
       end: { 
         dateTime: endISO,
-        timeZone: timezone
+        timeZone: tz
       },
       attendees: [
-        { email: formData.email, displayName: formData.fullName },
+        { email: email, displayName: name },
         { email: process.env.HOST_EMAIL || '' },
       ],
       conferenceData: {
@@ -835,7 +836,7 @@ ${formData.additionalNotes || 'No additional notes provided'}
       }
     };
 
-    const clientLocalTime = formatDateForEmail(startISO, timezone);
+    const clientLocalTime = formatDateForEmail(startISO, tz);
     const hostTimezone = process.env.HOST_TIMEZONE || 'America/New_York';
     const hostLocalTime = formatDateForEmail(startISO, hostTimezone);
 
@@ -856,7 +857,7 @@ ${formData.additionalNotes || 'No additional notes provided'}
     try {
       await transporter.sendMail({
         from: `"Enterprise AI Solutions" <${process.env.SMTP_EMAIL}>`,
-        to: formData.email,
+        to: email,
         subject: '✅ Your Enterprise AI Demo is Confirmed!',
         html: `
 <!DOCTYPE html>
@@ -879,9 +880,9 @@ ${formData.additionalNotes || 'No additional notes provided'}
     
     <!-- Content -->
     <div style="padding: 40px 30px;">
-      <h2 style="color: #ffffff; margin-top: 0; font-size: 22px; font-weight: 600;">Hi ${formData.fullName}! 👋</h2>
+      <h2 style="color: #ffffff; margin-top: 0; font-size: 22px; font-weight: 600;">Hi ${name}! 👋</h2>
       <p style="color: #a0a0a0; font-size: 16px; line-height: 1.6; margin: 20px 0;">
-        Thank you for scheduling an Enterprise AI demo with us. We're excited to demonstrate how our AI solutions can transform <strong style="color: #c4b5fd;">${formData.companyName}</strong>'s operations and drive measurable ROI.
+        Thank you for scheduling an Enterprise AI demo with us. We're excited to demonstrate how our AI solutions can transform <strong style="color: #c4b5fd;">${company}</strong>'s operations and drive measurable ROI.
       </p>
       
       <!-- Meeting Details Card -->
@@ -900,10 +901,10 @@ ${formData.additionalNotes || 'No additional notes provided'}
           <a href="${meetLink}" style="color: #a855f7; text-decoration: none; word-break: break-all; font-size: 14px; display: inline-block; background: rgba(124, 58, 237, 0.1); padding: 8px 12px; border-radius: 6px; margin-top: 4px;">${meetLink}</a>
         </div>
 
-        ${formData.specificInterest ? `
+        ${specificInterest ? `
         <div style="margin: 20px 0; padding-top: 20px; border-top: 1px solid rgba(124, 58, 237, 0.2);">
           <div style="color: #7c3aed; font-weight: 600; margin-bottom: 8px; font-size: 14px;">🎯 FOCUS AREAS</div>
-          <div style="color: #e0e0e0; font-size: 15px;">${formData.specificInterest}</div>
+          <div style="color: #e0e0e0; font-size: 15px;">${specificInterest}</div>
         </div>
         ` : ''}
       </div>
@@ -919,7 +920,7 @@ ${formData.additionalNotes || 'No additional notes provided'}
       <div style="background: rgba(255, 255, 255, 0.02); border-radius: 12px; padding: 24px; margin: 30px 0;">
         <h3 style="color: #c4b5fd; margin-top: 0; font-size: 16px; font-weight: 600;">What to Expect:</h3>
         <ul style="color: #a0a0a0; font-size: 14px; line-height: 1.8; margin: 16px 0; padding-left: 20px;">
-          <li>Personalized demonstration tailored to ${formData.companyName}</li>
+          <li>Personalized demonstration tailored to ${company}</li>
           <li>Live Q&A with our enterprise solutions team</li>
           <li>Discussion of your specific use cases and requirements</li>
           <li>Custom ROI analysis for your organization</li>
@@ -962,7 +963,7 @@ ${formData.additionalNotes || 'No additional notes provided'}
       await transporter.sendMail({
         from: `"Demo Scheduler" <${process.env.SMTP_EMAIL}>`,
         to: process.env.HOST_EMAIL,
-        subject: `🎯 NEW ENTERPRISE DEMO: ${formData.companyName} (${formData.companySize})`,
+        subject: `🎯 NEW ENTERPRISE DEMO: ${company} (${companySize || 'Size Not Provided'})`,
         html: `
 <!DOCTYPE html>
 <html>
@@ -983,7 +984,7 @@ ${formData.additionalNotes || 'No additional notes provided'}
     <div style="padding: 35px;">
       <!-- Priority Badge -->
       <div style="display: inline-block; background: linear-gradient(135deg, #dc2626, #ef4444); color: white; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 25px;">
-        ${formData.companySize.includes('Fortune') ? '⭐ FORTUNE COMPANY' : '🔥 ENTERPRISE LEAD'}
+        ${companySize && companySize.includes('Fortune') ? '⭐ FORTUNE COMPANY' : '🔥 ENTERPRISE LEAD'}
       </div>
       
       <!-- Client Details Card -->
@@ -993,42 +994,42 @@ ${formData.additionalNotes || 'No additional notes provided'}
         <table style="width: 100%; border-collapse: collapse;">
           <tr>
             <td style="padding: 12px 0; color: #10b981; font-weight: 600; font-size: 13px; width: 140px; vertical-align: top;">NAME</td>
-            <td style="padding: 12px 0; color: #ffffff; font-size: 15px;">${formData.fullName}</td>
+            <td style="padding: 12px 0; color: #ffffff; font-size: 15px;">${name}</td>
           </tr>
           <tr style="border-top: 1px solid rgba(16, 185, 129, 0.1);">
             <td style="padding: 12px 0; color: #10b981; font-weight: 600; font-size: 13px; vertical-align: top;">TITLE</td>
-            <td style="padding: 12px 0; color: #ffffff; font-size: 15px;">${formData.jobTitle}</td>
+            <td style="padding: 12px 0; color: #ffffff; font-size: 15px;">${jobTitle || 'Not provided'}</td>
           </tr>
           <tr style="border-top: 1px solid rgba(16, 185, 129, 0.1);">
             <td style="padding: 12px 0; color: #10b981; font-weight: 600; font-size: 13px; vertical-align: top;">COMPANY</td>
-            <td style="padding: 12px 0; color: #ffffff; font-size: 15px; font-weight: 600;">${formData.companyName}</td>
+            <td style="padding: 12px 0; color: #ffffff; font-size: 15px; font-weight: 600;">${company}</td>
           </tr>
           <tr style="border-top: 1px solid rgba(16, 185, 129, 0.1);">
             <td style="padding: 12px 0; color: #10b981; font-weight: 600; font-size: 13px; vertical-align: top;">COMPANY SIZE</td>
-            <td style="padding: 12px 0; color: #ffffff; font-size: 15px;">${formData.companySize}</td>
+            <td style="padding: 12px 0; color: #ffffff; font-size: 15px;">${companySize || 'Not provided'}</td>
           </tr>
           <tr style="border-top: 1px solid rgba(16, 185, 129, 0.1);">
             <td style="padding: 12px 0; color: #10b981; font-weight: 600; font-size: 13px; vertical-align: top;">EMAIL</td>
-            <td style="padding: 12px 0;"><a href="mailto:${formData.email}" style="color: #10b981; text-decoration: none;">${formData.email}</a></td>
+            <td style="padding: 12px 0;"><a href="mailto:${email}" style="color: #10b981; text-decoration: none;">${email}</a></td>
           </tr>
           <tr style="border-top: 1px solid rgba(16, 185, 129, 0.1);">
             <td style="padding: 12px 0; color: #10b981; font-weight: 600; font-size: 13px; vertical-align: top;">PHONE</td>
-            <td style="padding: 12px 0; color: #ffffff; font-size: 15px;">${formData.phone || 'Not provided'}</td>
+            <td style="padding: 12px 0; color: #ffffff; font-size: 15px;">${phone || 'Not provided'}</td>
           </tr>
         </table>
       </div>
 
-      ${formData.specificInterest ? `
+      ${specificInterest ? `
       <div style="background: rgba(124, 58, 237, 0.05); border: 1px solid rgba(124, 58, 237, 0.2); padding: 20px; margin: 20px 0; border-radius: 12px;">
         <h4 style="color: #a855f7; margin-top: 0; font-size: 14px; font-weight: 600;">🎯 PRODUCT INTEREST</h4>
-        <p style="color: #e0e0e0; margin: 8px 0 0; font-size: 15px; line-height: 1.6;">${formData.specificInterest}</p>
+        <p style="color: #e0e0e0; margin: 8px 0 0; font-size: 15px; line-height: 1.6;">${specificInterest}</p>
       </div>
       ` : ''}
 
-      ${formData.additionalNotes ? `
+      ${additionalNotes ? `
       <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); padding: 20px; margin: 20px 0; border-radius: 12px;">
         <h4 style="color: #60a5fa; margin-top: 0; font-size: 14px; font-weight: 600;">📝 ADDITIONAL NOTES</h4>
-        <p style="color: #e0e0e0; margin: 8px 0 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${formData.additionalNotes}</p>
+        <p style="color: #e0e0e0; margin: 8px 0 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${additionalNotes}</p>
       </div>
       ` : ''}
       
