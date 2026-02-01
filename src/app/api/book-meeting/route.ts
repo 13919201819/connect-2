@@ -943,7 +943,7 @@ ${additionalNotes || 'No additional notes provided'}
         Looking forward to showing you the future of AI! 🎯
       </p>
       <p style="color: #606060; font-size: 12px; margin: 12px 0 0;">
-        © ${new Date().getFullYear()} Enterprise AI Solutions. All rights reserved.
+        © ${new Date().getFullYear()} MistrAI. All rights reserved.
       </p>
     </div>
   </div>
