@@ -855,7 +855,7 @@ ${additionalNotes || 'No additional notes provided'}
     // Email to Client
     try {
       await transporter.sendMail({
-        from: `"Enterprise AI Solutions" <${process.env.SMTP_EMAIL}>`,
+        from: `"MistrAI" <${process.env.SMTP_EMAIL}>`,
         to: email,
         subject: '✅ Your Enterprise AI Demo is Confirmed!',
         html: `
