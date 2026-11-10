@@ -620,8 +620,8 @@ export async function POST(request: Request) {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: 'karanbhatt230803@gmail.com',
-        pass: 'tqhkxvkqwzblanjc',
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASS,
       },
     });
 
@@ -642,8 +642,8 @@ export async function POST(request: Request) {
     }
 
     const mailOptions: MailOptions = {
-      from: '"MistrAI Ideas Portal" <karanbhatt230803@gmail.com>',
-      to: 'karanbhatt230803@gmail.com',
+      from: `"MistrAI Ideas Portal" <${process.env.SMTP_EMAIL}>`,
+      to: process.env.SMTP_EMAIL!,
       replyTo: data.email,
       subject: `💡 New Idea: ${data.ideaTitle} | ${data.fullName}`,
       text: textBody,

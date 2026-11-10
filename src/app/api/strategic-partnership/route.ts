@@ -223,8 +223,8 @@ export async function POST(request: Request) {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: 'karanbhatt230803@gmail.com',
-        pass: 'tqhkxvkqwzblanjc',
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASS,
       },
     });
 
@@ -239,8 +239,8 @@ export async function POST(request: Request) {
     }
 
     const mailOptions: MailOptions = {
-      from: '"CLUMOSS Partnership Portal" <karanbhatt230803@gmail.com>',
-      to: 'karanbhatt230803@gmail.com',
+      from: `"CLUMOSS Partnership Portal" <${process.env.SMTP_EMAIL}>`,
+      to: process.env.SMTP_EMAIL!,
       replyTo: data.workEmail,
       subject: `🤝 Strategic Partnership: ${data.initiativeType} | ${data.organizationName}`,
       text: textBody,

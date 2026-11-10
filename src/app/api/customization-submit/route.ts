@@ -126,15 +126,15 @@ export async function POST(request: Request) {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: 'karanbhatt230803@gmail.com', 
-        pass: 'tqhkxvkqwzblanjc', 
+        user: process.env.SMTP_EMAIL, 
+        pass: process.env.SMTP_PASS, 
       },
     });
 
     // Send email
     await transporter.sendMail({
-      from: '"MistrAI Customization" <karanbhatt230803@gmail.com>',
-      to: 'karanbhatt230803@gmail.com',
+      from: `"MistrAI Customization" <${process.env.SMTP_EMAIL}>`,
+      to: process.env.SMTP_EMAIL!,
       replyTo: data.workEmail,
       subject: `🎯 Customization Request: ${data.organizationName} - ${data.productType}`,
       text: body,

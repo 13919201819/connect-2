@@ -960,7 +960,7 @@ ${additionalNotes || 'No additional notes provided'}
     // Email to Host/Sales Team
     try {
       await transporter.sendMail({
-        from: `"Demo Scheduler" <${process.env.SMTP_EMAIL}>`,
+        from: `"MISTR.AI" <${process.env.SMTP_EMAIL}>`,
         to: process.env.HOST_EMAIL,
         subject: `🎯 NEW ENTERPRISE DEMO: ${company} (${companySize || 'Size Not Provided'})`,
         html: `
